@@ -2,6 +2,7 @@ package http
 
 import (
 	"net/http"
+	"strconv"
 
 	"order-service/internal/usecase"
 
@@ -26,6 +27,7 @@ func (h *OrderHandler) RegisterRoutes(r *gin.Engine) {
 	r.POST("/orders", h.CreateOrder)
 	r.GET("/orders/:id", h.GetOrder)
 	r.PATCH("/orders/:id/cancel", h.CancelOrder)
+	r.GET("/orders/recent", h.GetRecentOrders)
 }
 
 func (h *OrderHandler) CreateOrder(c *gin.Context) {
@@ -61,4 +63,27 @@ func (h *OrderHandler) CancelOrder(c *gin.Context) {
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"status": "cancelled"})
+}
+
+func (h *OrderHandler) GetRecentOrders(c *gin.Context) {
+	limitStr := c.Query("limit")
+
+	if limitStr == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "limit is required"})
+		return
+	}
+
+	limit, err := strconv.Atoi(limitStr)
+	if err != nil || limit <= 0 || limit > 100 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid limit"})
+		return
+	}
+
+	orders, err := h.uc.GetRecentOrders(limit)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, orders)
 }

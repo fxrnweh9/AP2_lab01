@@ -80,3 +80,41 @@ func (r *OrderRepository) Update(order *domain.Order) error {
 	_, err := r.db.Exec(ctx, query, order.Status, order.ID)
 	return err
 }
+
+func (r *OrderRepository) GetRecent(limit int) ([]*domain.Order, error) {
+	query := `
+		SELECT id, customer_id, item_name, amount, status, created_at
+		FROM orders
+		ORDER BY created_at DESC
+		LIMIT $1
+	`
+
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+
+	rows, err := r.db.Query(ctx, query, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var orders []*domain.Order
+
+	for rows.Next() {
+		var o domain.Order
+		err := rows.Scan(
+			&o.ID,
+			&o.CustomerID,
+			&o.ItemName,
+			&o.Amount,
+			&o.Status,
+			&o.CreatedAt,
+		)
+		if err != nil {
+			return nil, err
+		}
+		orders = append(orders, &o)
+	}
+
+	return orders, nil
+}

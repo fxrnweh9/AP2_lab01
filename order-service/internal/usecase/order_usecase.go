@@ -76,3 +76,7 @@ func (uc *OrderUseCase) CancelOrder(id string) error {
 	order.Status = domain.StatusCancelled
 	return uc.repo.Update(order)
 }
+
+func (uc *OrderUseCase) GetRecentOrders(limit int) ([]*domain.Order, error) {
+	return uc.repo.GetRecent(limit)
+}

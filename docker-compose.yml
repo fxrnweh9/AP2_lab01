@@ -1,0 +1,32 @@
+version: '3.8'
+services:
+  order-db:
+    image: postgres:15
+    environment:
+      POSTGRES_DB: orders_db
+      POSTGRES_PASSWORD: pass
+    ports:
+      - "5431:5432"
+
+  payment-db:
+    image: postgres:15
+    environment:
+      POSTGRES_DB: payments_db
+      POSTGRES_PASSWORD: pass
+    ports:
+      - "5432:5432"
+
+  order-service:
+    build: ./order-service
+    depends_on:
+      - order-db
+    environment:
+      DB_URL: "postgres://postgres:pass@order-db:5432/orders_db"
+      PAYMENT_SERVICE_URL: "http://payment-service:8081"
+
+  payment-service:
+    build: ./payment-service
+    depends_on:
+      - payment-db
+    environment:
+      DB_URL: "postgres://postgres:pass@payment-db:5432/payments_db"
