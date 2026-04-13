@@ -7,31 +7,20 @@ import (
 	pb "github.com/fxrnweh9/proto-contracts/paymentpb"
 
 	"google.golang.org/grpc"
-	"google.golang.org/grpc/credentials/insecure"
 )
 
 type PaymentGRPCClient struct {
 	client pb.PaymentServiceClient
-	conn   *grpc.ClientConn
 }
 
 func NewPaymentGRPCClient(addr string) (*PaymentGRPCClient, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
-	defer cancel()
-
-	conn, err := grpc.DialContext(
-		ctx,
-		addr,
-		grpc.WithTransportCredentials(insecure.NewCredentials()),
-		grpc.WithBlock(),
-	)
+	conn, err := grpc.Dial(addr, grpc.WithInsecure(), grpc.WithBlock(), grpc.WithTimeout(2*time.Second))
 	if err != nil {
 		return nil, err
 	}
 
 	return &PaymentGRPCClient{
 		client: pb.NewPaymentServiceClient(conn),
-		conn:   conn,
 	}, nil
 }
 
@@ -49,10 +38,4 @@ func (p *PaymentGRPCClient) ProcessPayment(orderID string, amount int64) (string
 	}
 
 	return resp.Status, nil
-}
-
-func (p *PaymentGRPCClient) Close() {
-	if p.conn != nil {
-		p.conn.Close()
-	}
 }

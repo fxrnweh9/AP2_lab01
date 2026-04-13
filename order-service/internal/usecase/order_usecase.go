@@ -80,3 +80,17 @@ func (uc *OrderUseCase) CancelOrder(id string) error {
 func (uc *OrderUseCase) GetRecentOrders(limit int) ([]*domain.Order, error) {
 	return uc.repo.GetRecent(limit)
 }
+
+func (uc *OrderUseCase) WatchOrder(orderID string) <-chan domain.Order {
+	ch := make(chan domain.Order)
+
+	go func() {
+		for {
+			order, _ := uc.repo.GetByID(orderID)
+			ch <- *order
+			time.Sleep(1 * time.Second)
+		}
+	}()
+
+	return ch
+}

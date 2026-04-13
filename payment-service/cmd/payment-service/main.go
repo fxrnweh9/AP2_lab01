@@ -1,30 +1,76 @@
 package main
 
 import (
+	"context"
 	"log"
+	"net"
+	"os"
+	"time"
+
 	"payment-service/internal/app"
 	"payment-service/internal/repository"
-	"payment-service/internal/transport/http"
+	grpcHandler "payment-service/internal/transport/grpc"
 	"payment-service/internal/usecase"
 
-	"github.com/gin-gonic/gin"
+	pb "github.com/fxrnweh9/proto-contracts/paymentpb"
+
+	"google.golang.org/grpc"
+
+	grpcLib "google.golang.org/grpc"
+
+	"github.com/joho/godotenv"
 )
 
+func LoggingInterceptor(
+	ctx context.Context,
+	req any,
+	info *grpc.UnaryServerInfo,
+	handler grpc.UnaryHandler,
+) (any, error) {
+
+	start := time.Now()
+
+	res, err := handler(ctx, req)
+
+	log.Printf("method=%s duration=%s error=%v",
+		info.FullMethod,
+		time.Since(start),
+		err,
+	)
+
+	return res, err
+}
+
 func main() {
-	db, err := app.NewDB("postgres://payment_user:1234@localhost:5432/payment_db")
+	err := godotenv.Load()
+	if err != nil {
+		log.Fatal("Error loading .env file")
+	}
+
+	db, err := app.NewDB(os.Getenv("DB_URL"))
 	if err != nil {
 		log.Fatal(err)
 	}
 
-	paymentRepo := repository.NewPaymentRepository(db)
-	paymentUC := usecase.NewPaymentUseCase(paymentRepo)
-	paymentHandler := http.NewPaymentHandler(paymentUC)
+	repo := repository.NewPaymentRepository(db)
+	uc := usecase.NewPaymentUseCase(repo)
+	server := grpcHandler.NewPaymentServer(uc)
 
-	r := gin.Default()
-	paymentHandler.RegisterRoutes(r)
-
-	log.Println("Payment Service running on :8081")
-	if err := r.Run(":8081"); err != nil {
+	lis, err := net.Listen("tcp", ":"+os.Getenv("GRPC_PORT"))
+	if err != nil {
 		log.Fatal(err)
 	}
+
+	grpcServer := grpcLib.NewServer(
+		grpcLib.UnaryInterceptor(LoggingInterceptor),
+	)
+
+	pb.RegisterPaymentServiceServer(grpcServer, server)
+
+	log.Println("gRPC Payment Service running on", os.Getenv("GRPC_PORT"))
+
+	if err := grpcServer.Serve(lis); err != nil {
+		log.Fatal(err)
+	}
+
 }
