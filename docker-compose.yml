@@ -1,32 +1,74 @@
 version: '3.8'
+
 services:
   order-db:
     image: postgres:15
     environment:
       POSTGRES_DB: orders_db
+      POSTGRES_USER: postgres
       POSTGRES_PASSWORD: pass
     ports:
-      - "5431:5432"
+      - "5433:5432"
 
   payment-db:
     image: postgres:15
     environment:
       POSTGRES_DB: payments_db
+      POSTGRES_USER: postgres
       POSTGRES_PASSWORD: pass
     ports:
-      - "5432:5432"
+      - "5434:5432"
+
+  rabbitmq:
+    image: rabbitmq:3-management
+    container_name: rabbitmq
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    environment:
+      RABBITMQ_DEFAULT_USER: guest
+      RABBITMQ_DEFAULT_PASS: guest
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
   order-service:
     build: ./order-service
     depends_on:
       - order-db
+      - payment-service
     environment:
-      DB_URL: "postgres://postgres:pass@order-db:5432/orders_db"
-      PAYMENT_SERVICE_URL: "http://payment-service:8081"
+      DB_URL: "postgres://postgres:pass@order-db:5432/orders_db?sslmode=disable"
+      PAYMENT_GRPC_ADDR: "payment-service:50051"
+    ports:
+      - "8080:8080"
+      - "50052:50052"
 
   payment-service:
     build: ./payment-service
     depends_on:
-      - payment-db
+      payment-db:
+        condition: service_started
+      rabbitmq:
+        condition: service_healthy
     environment:
-      DB_URL: "postgres://postgres:pass@payment-db:5432/payments_db"
+      DB_URL: "postgres://postgres:pass@payment-db:5432/payments_db?sslmode=disable"
+      GRPC_PORT: "50051"
+      RABBITMQ_URL: "amqp://guest:guest@rabbitmq:5672/"
+    ports:
+      - "50051:50051"
+
+  notification-service:
+    build: ./notification-service
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+    environment:
+      RABBITMQ_URL: "amqp://guest:guest@rabbitmq:5672/"
+
+volumes:
+  rabbitmq_data:

@@ -8,11 +8,12 @@ import (
 )
 
 type PaymentUseCase struct {
-	repo PaymentRepository
+	repo      PaymentRepository
+	publisher EventPublisher
 }
 
-func NewPaymentUseCase(repo PaymentRepository) *PaymentUseCase {
-	return &PaymentUseCase{repo: repo}
+func NewPaymentUseCase(repo PaymentRepository, publisher EventPublisher) *PaymentUseCase {
+	return &PaymentUseCase{repo: repo, publisher: publisher}
 }
 
 func (uc *PaymentUseCase) ProcessPayment(orderID string, amount int64) (*domain.Payment, error) {
@@ -25,6 +26,14 @@ func (uc *PaymentUseCase) ProcessPayment(orderID string, amount int64) (*domain.
 			CreatedAt: time.Now(),
 		}
 		_ = uc.repo.Create(p)
+
+		_ = uc.publisher.PublishPaymentCompleted(PaymentCompletedEvent{
+			EventID: uuid.New().String(),
+			OrderID: orderID,
+			Amount:  amount,
+			Status:  string(domain.StatusDeclined),
+		})
+
 		return p, domain.ErrPaymentLimitExceeded
 	}
 
@@ -41,6 +50,13 @@ func (uc *PaymentUseCase) ProcessPayment(orderID string, amount int64) (*domain.
 	if err != nil {
 		return nil, err
 	}
+
+	_ = uc.publisher.PublishPaymentCompleted(PaymentCompletedEvent{
+		EventID: uuid.New().String(),
+		OrderID: orderID,
+		Amount:  amount,
+		Status:  string(domain.StatusAuthorized),
+	})
 
 	return p, nil
 }

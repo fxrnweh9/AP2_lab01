@@ -2,6 +2,7 @@ package http
 
 import (
 	"net/http"
+	"order-service/internal/domain"
 	"strconv"
 
 	"order-service/internal/usecase"
@@ -29,7 +30,6 @@ func (h *OrderHandler) RegisterRoutes(r *gin.Engine) {
 	r.PATCH("/orders/:id/cancel", h.CancelOrder)
 	r.GET("/orders/recent", h.GetRecentOrders)
 }
-
 func (h *OrderHandler) CreateOrder(c *gin.Context) {
 	var req CreateOrderRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -39,7 +39,23 @@ func (h *OrderHandler) CreateOrder(c *gin.Context) {
 
 	order, err := h.uc.CreateOrder(c.Request.Context(), req.CustomerID, req.ItemName, req.Amount)
 	if err != nil {
-		c.JSON(http.StatusServiceUnavailable, gin.H{"error": err.Error()})
+		switch err {
+		case domain.ErrPaymentLimitExceeded:
+			// Платёж отклонён — бизнес правило
+			c.JSON(http.StatusUnprocessableEntity, gin.H{
+				"error":  "payment declined: amount exceeds limit",
+				"status": "Failed",
+			})
+		case domain.ErrServiceUnavailable:
+			// Payment Service недоступен
+			c.JSON(http.StatusServiceUnavailable, gin.H{
+				"error": "payment service unavailable",
+			})
+		default:
+			c.JSON(http.StatusInternalServerError, gin.H{
+				"error": err.Error(),
+			})
+		}
 		return
 	}
 
