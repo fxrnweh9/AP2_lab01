@@ -3,12 +3,9 @@ package main
 import (
 	"log"
 	"net"
-
-	"context"
 	"os"
 	"os/signal"
 	"syscall"
-	"time"
 
 	"order-service/internal/app"
 	"order-service/internal/repository"
@@ -20,29 +17,41 @@ import (
 
 	"github.com/gin-gonic/gin"
 	grpcLib "google.golang.org/grpc"
+
+	"github.com/joho/godotenv"
 )
 
 func main() {
-	db, err := app.NewDB("postgres://order_user:1234@localhost:5432/order_db")
+	_ = godotenv.Load()
+
+	dbURL := os.Getenv("DB_URL")
+	if dbURL == "" {
+		dbURL = "postgres://postgres:pass@order-db:5432/orders_db?sslmode=disable"
+	}
+
+	db, err := app.NewDB(dbURL)
 	if err != nil {
 		log.Fatal(err)
 	}
 
 	orderRepo := repository.NewOrderRepository(db)
 
-	paymentClient, err := app.NewPaymentGRPCClient("localhost:50051")
+	paymentAddr := os.Getenv("PAYMENT_GRPC_ADDR")
+	if paymentAddr == "" {
+		paymentAddr = "payment-service:50051"
+	}
+
+	paymentClient, err := app.NewPaymentGRPCClient(paymentAddr)
 	if err != nil {
 		log.Fatal(err)
 	}
 
 	orderUC := usecase.NewOrderUseCase(orderRepo, paymentClient)
 
-	// REST
 	orderHandler := orderHandlerHttp.NewOrderHandler(orderUC)
 	r := gin.Default()
 	orderHandler.RegisterRoutes(r)
 
-	// gRPC server
 	orderServer := orderGrpc.NewOrderServer(orderUC)
 
 	go func() {
@@ -50,32 +59,24 @@ func main() {
 		if err != nil {
 			log.Fatal(err)
 		}
-
 		grpcServer := grpcLib.NewServer()
 		pb.RegisterOrderServiceServer(grpcServer, orderServer)
-
 		log.Println("Order gRPC Server running on :50052")
-
 		if err := grpcServer.Serve(lis); err != nil {
 			log.Fatal(err)
 		}
 	}()
 
-	// REST runs last (blocking)
-	log.Println("Order Service running on :8080")
-	if err := r.Run(":8080"); err != nil {
-		log.Fatal(err)
-	}
-
 	quit := make(chan os.Signal, 1)
 	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
+
+	go func() {
+		log.Println("Order Service REST running on :8080")
+		if err := r.Run(":8080"); err != nil {
+			log.Fatal(err)
+		}
+	}()
+
 	<-quit
-
-	log.Println("Shutting down server...")
-
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-
-	_ = ctx
-
+	log.Println("Shutting down order-service...")
 }
