@@ -1,6 +1,5 @@
 package usecase
 
-// EventPublisher — порт для публикации событий (не зависит от RabbitMQ)
 type EventPublisher interface {
 	PublishPaymentCompleted(event PaymentCompletedEvent) error
 }

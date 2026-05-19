@@ -19,6 +19,17 @@ services:
     ports:
       - "5434:5432"
 
+  redis:
+    image: redis:7-alpine
+    container_name: redis
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
   rabbitmq:
     image: rabbitmq:3-management
     container_name: rabbitmq
@@ -39,11 +50,16 @@ services:
   order-service:
     build: ./order-service
     depends_on:
-      - order-db
-      - payment-service
+      order-db:
+        condition: service_started
+      payment-service:
+        condition: service_started
+      redis:
+        condition: service_healthy
     environment:
       DB_URL: "postgres://postgres:pass@order-db:5432/orders_db?sslmode=disable"
       PAYMENT_GRPC_ADDR: "payment-service:50051"
+      REDIS_URL: "redis:6379"
     ports:
       - "8080:8080"
       - "50052:50052"
@@ -67,8 +83,12 @@ services:
     depends_on:
       rabbitmq:
         condition: service_healthy
+      redis:
+        condition: service_healthy
     environment:
       RABBITMQ_URL: "amqp://guest:guest@rabbitmq:5672/"
+      REDIS_URL: "redis:6379"
+      PROVIDER_MODE: "SIMULATED"
 
 volumes:
   rabbitmq_data:

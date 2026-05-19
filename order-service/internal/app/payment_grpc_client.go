@@ -38,7 +38,6 @@ func (p *PaymentGRPCClient) ProcessPayment(orderID string, amount int64) (string
 	})
 
 	if err != nil {
-		// Конвертируем gRPC ошибку в domain ошибку
 		st, ok := status.FromError(err)
 		if ok {
 			switch st.Code() {
