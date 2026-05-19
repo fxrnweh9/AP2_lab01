@@ -41,13 +41,11 @@ func (h *OrderHandler) CreateOrder(c *gin.Context) {
 	if err != nil {
 		switch err {
 		case domain.ErrPaymentLimitExceeded:
-			// Платёж отклонён — бизнес правило
 			c.JSON(http.StatusUnprocessableEntity, gin.H{
 				"error":  "payment declined: amount exceeds limit",
 				"status": "Failed",
 			})
 		case domain.ErrServiceUnavailable:
-			// Payment Service недоступен
 			c.JSON(http.StatusServiceUnavailable, gin.H{
 				"error": "payment service unavailable",
 			})
@@ -64,7 +62,8 @@ func (h *OrderHandler) CreateOrder(c *gin.Context) {
 
 func (h *OrderHandler) GetOrder(c *gin.Context) {
 	id := c.Param("id")
-	order, err := h.uc.GetOrder(id)
+
+	order, err := h.uc.GetOrder(c.Request.Context(), id)
 	if err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "order not found"})
 		return
@@ -74,7 +73,8 @@ func (h *OrderHandler) GetOrder(c *gin.Context) {
 
 func (h *OrderHandler) CancelOrder(c *gin.Context) {
 	id := c.Param("id")
-	if err := h.uc.CancelOrder(id); err != nil {
+
+	if err := h.uc.CancelOrder(c.Request.Context(), id); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}

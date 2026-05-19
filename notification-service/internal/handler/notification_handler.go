@@ -2,7 +2,7 @@ package handler
 
 import (
 	"fmt"
-	"log"
+	"notification-service/internal/provider"
 )
 
 type PaymentEvent struct {
@@ -14,11 +14,11 @@ type PaymentEvent struct {
 }
 
 type NotificationHandler struct {
-	// в реальной жизни — email client, но здесь просто лог
+	sender provider.EmailSender
 }
 
-func NewNotificationHandler() *NotificationHandler {
-	return &NotificationHandler{}
+func NewNotificationHandler(sender provider.EmailSender) *NotificationHandler {
+	return &NotificationHandler{sender: sender}
 }
 
 func (h *NotificationHandler) Handle(event PaymentEvent) error {
@@ -27,14 +27,12 @@ func (h *NotificationHandler) Handle(event PaymentEvent) error {
 		email = "user@example.com"
 	}
 
-	amountDollars := fmt.Sprintf("$%.2f", float64(event.Amount)/100)
-
-	log.Printf("[Notification] Sent email to %s for Order #%s. Amount: %s. Status: %s",
-		email,
-		event.OrderID,
-		amountDollars,
-		event.Status,
+	amount := fmt.Sprintf("$%.2f", float64(event.Amount)/100)
+	subject := fmt.Sprintf("Payment %s for Order #%s", event.Status, event.OrderID)
+	body := fmt.Sprintf(
+		"Your payment of %s for Order #%s has been %s.",
+		amount, event.OrderID, event.Status,
 	)
 
-	return nil
+	return h.sender.Send(email, subject, body)
 }
